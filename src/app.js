@@ -1,33 +1,32 @@
 // src/app.js
 
 import { signIn, getUser } from './auth';
+import { getUserFragments } from './api';
 
 async function init() {
-  // Get our UI elements
   const userSection = document.querySelector('#user');
   const loginBtn = document.querySelector('#login');
 
-  // Wire up event handlers to deal with login and logout.
+  // On login button click, redirect to Cognito login
   loginBtn.onclick = () => {
-    // Sign-in via the Amazon Cognito Hosted UI (requires redirects), see:
     signIn();
   };
 
-  // See if we're signed in (i.e., we'll have a `user` object)
+  // Check if user is authenticated
   const user = await getUser();
-  if (!user) {
-    return;
-  }
+  if (!user) return;
 
-  // Update the UI to welcome the user
+  // Show user info on page
   userSection.hidden = false;
-
-  // Show the user's username
   userSection.querySelector('.username').innerText = user.username;
-
-  // Disable the Login button
   loginBtn.disabled = true;
+
+  // Do an authenticated request to the fragments API server and log the result
+  const userFragments = await getUserFragments(user);
+
+  // Future: show user fragments in HTML
+  console.log('Fetched fragments for user:', userFragments);
 }
 
-// Wait for the DOM to be ready, then start the app
+// Initialize when DOM loads
 addEventListener('DOMContentLoaded', init);
