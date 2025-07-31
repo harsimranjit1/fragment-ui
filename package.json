@@ -1,0 +1,21 @@
+{
+  "name": "fragments-ui",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Fragments UI testing web app",
+  "scripts": {
+    "start": "parcel serve index.html --port 1234"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harsimranjit1/fragment-ui.git"
+  },
+  "author": "harsimranjit1",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "parcel": "^2.15.4"
+  },
+  "dependencies": {
+    "oidc-client-ts": "^3.3.0"
+  }
+}
