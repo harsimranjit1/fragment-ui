@@ -1,29 +1,50 @@
-// src/api.js
+// fragments-ui/src/api.js
+import { getUser } from './auth';
 
-// fragments microservice API to use, defaults to localhost:8080 if not set in env
-const apiUrl = process.env.API_URL || 'http://localhost:8080';
+const API_URL = process.env.API_URL;
 
-/**
- * Given an authenticated user, request all fragments for this user from the
- * fragments microservice (currently only running locally). We expect a user
- * to have an `idToken` attached, so we can send that along with the request.
- */
-export async function getUserFragments(user) {
-  console.log('Requesting user fragments data...');
-  try {
-    const res = await fetch(`${apiUrl}/v1/fragments`, {
-      // Generate headers with the proper Authorization bearer token to pass.
-      // We are using the `authorizationHeaders()` helper method we defined
-      // earlier, to automatically attach the user's ID token.
-      headers: user.authorizationHeaders(),
-    });
-    if (!res.ok) {
-      throw new Error(`${res.status} ${res.statusText}`);
-    }
-    const data = await res.json();
-    console.log('Successfully got user fragments data', { data });
-    return data;
-  } catch (err) {
-    console.error('Unable to call GET /v1/fragment', { err });
+// Fail fast if env not loaded
+if (!API_URL) {
+  throw new Error('API_URL is not set. Put it in fragments-ui/.env and restart `npm start`.');
+}
+console.log('Using API_URL:', API_URL);
+
+async function authHeaders(type) {
+  const user = await getUser();
+  if (!user) throw new Error('Not logged in');
+  return user.authorizationHeaders(type);
+}
+
+// GET /v1/fragments
+export async function listFragments() {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/v1/fragments`, { headers });
+  if (!res.ok) throw new Error(`GET /v1/fragments failed: ${res.status}`);
+  return res.json();
+}
+
+// keep compatibility with app.js that imports getUserFragments
+export const getUserFragments = listFragments;
+
+// POST /v1/fragments
+export async function createFragment(text) {
+  const headers = await authHeaders('text/plain');
+  const res = await fetch(`${API_URL}/v1/fragments`, {
+    method: 'POST',
+    headers,
+    body: text,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`POST /v1/fragments failed: ${res.status}${body ? ` | ${body}` : ''}`);
   }
+  return res; // caller can read Location header
+}
+
+// helper to GET one fragment by id (used by the View button)
+export async function getFragmentById(id) {
+  const headers = await authHeaders();
+  const res = await fetch(`${API_URL}/v1/fragments/${id}`, { headers });
+  if (!res.ok) throw new Error(`GET /v1/fragments/${id} failed: ${res.status}`);
+  return res.text();
 }

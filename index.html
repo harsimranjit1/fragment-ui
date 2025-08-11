@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -7,11 +7,61 @@
   </head>
   <body>
     <h1>Fragments UI</h1>
-    <nav>
-      <button id="login">Login</button>
-    </nav>
-    <section hidden id="user">
-      <h2>Hello There<span class="username"></span>!</h2>
-    </section>
+    <button id="login" type="button">Login</button>
+
+<h3>New Fragment</h3>
+<form id="createForm">
+  <textarea id="fragText" rows="4" cols="60"></textarea>
+  <button id="createBtn" type="submit">Submit</button>
+</form>
+
+<pre id="status"></pre>
+  </body>
+</html> -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Fragments UI</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; max-width: 800px; }
+      .row { margin: 1rem 0; }
+      textarea { width: 100%; }
+      code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; }
+      .ok { color: #0a7; }
+      .err { color: #b00; }
+      #user { font-weight: 600; }
+    </style>
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <h1>Fragments UI</h1>
+
+    <div class="row">
+      <button id="login" type="button">Login</button>
+      <span id="user">Not logged in</span>
+    </div>
+
+    <div class="row">
+      <h3>Create a fragment</h3>
+      <form id="createForm">
+        <textarea id="fragText" rows="4" placeholder="Type some text..."></textarea>
+        <div style="margin-top: .5rem">
+          <button id="createBtn" type="submit">Submit</button>
+        </div>
+      </form>
+      <div id="lastCreated"></div>
+    </div>
+
+    <div class="row">
+      <h3>Your fragments</h3>
+      <pre id="frags">[]</pre>
+    </div>
+
+    <div class="row">
+      <h3>Status</h3>
+      <pre id="status"></pre>
+    </div>
   </body>
 </html>

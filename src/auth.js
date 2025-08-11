@@ -1,55 +1,61 @@
-// src/auth.js
-
+// fragments-ui/src/auth.js
 import { UserManager } from 'oidc-client-ts';
 
-const cognitoAuthConfig = {
-  authority: `https://cognito-idp.us-east-1.amazonaws.com/${process.env.AWS_COGNITO_POOL_ID}`,
-  client_id: process.env.AWS_COGNITO_CLIENT_ID,
-  redirect_uri: process.env.OAUTH_SIGN_IN_REDIRECT_URL,
-  response_type: 'code',
-  scope: 'phone openid email',
-  // no revoke of "access token" (https://github.com/authts/oidc-client-ts/issues/262)
-  revokeTokenTypes: ['refresh_token'],
-  // no silent renew via "prompt=none" (https://github.com/authts/oidc-client-ts/issues/366)
-  automaticSilentRenew: false,
+// Read from Parcel's env (set in .env)
+const ENV = {
+  REGION:     process.env.COGNITO_REGION,
+  POOL_ID:    process.env.COGNITO_POOL_ID,
+  CLIENT_ID:  process.env.COGNITO_CLIENT_ID,
+  DOMAIN:     process.env.COGNITO_DOMAIN, // e.g., https://my-fragment-app.auth.us-east-1.amazoncognito.com
 };
 
-// Create a UserManager instance
+// Build inline metadata (no network fetch = no CORS issues)
+const issuer  = `https://cognito-idp.${ENV.REGION}.amazonaws.com/${ENV.POOL_ID}`;
+const metadata = {
+  issuer,
+  authorization_endpoint: `${ENV.DOMAIN}/oauth2/authorize`,
+  token_endpoint:         `${ENV.DOMAIN}/oauth2/token`,
+  userinfo_endpoint:      `${ENV.DOMAIN}/oauth2/userInfo`,
+  jwks_uri:               `${issuer}/.well-known/jwks.json`,
+};
+
 const userManager = new UserManager({
-  ...cognitoAuthConfig,
+  authority: issuer,
+  metadata,
+  client_id: ENV.CLIENT_ID,
+  redirect_uri: window.location.origin,   // http://localhost:1234
+  response_type: 'code',
+  scope: 'openid email',
+  automaticSilentRenew: false,
 });
 
-export async function signIn() {
-  // Trigger a redirect to the Cognito auth page, so user can authenticate
-  await userManager.signinRedirect();
-}
-
-// Create a simplified view of the user, with an extra method for creating the auth headers
+// Make a nice shape for our app
 function formatUser(user) {
-  console.log('User Authenticated', { user });
   return {
-    // If you add any other profile scopes, you can include them here
-    username: user.profile['cognito:username'],
-    email: user.profile.email,
-    idToken: user.id_token,
-    accessToken: user.access_token,
-    authorizationHeaders: (type = 'application/json') => ({
+    username:       user.profile['cognito:username'],
+    email:          user.profile.email,
+    idToken:        user.id_token,
+    accessToken:    user.access_token,
+    authorizationHeaders: (type='application/json') => ({
       'Content-Type': type,
-      Authorization: `Bearer ${user.id_token}`,
+      Authorization: `Bearer ${user.id_token}`, // backend expects ID token
     }),
   };
 }
 
+export function signIn() {
+  return userManager.signinRedirect();
+}
+
 export async function getUser() {
-  // First, check if we're handling a signin redirect callback (e.g., is ?code=... in URL)
+  // Handle callback
   if (window.location.search.includes('code=')) {
     const user = await userManager.signinCallback();
-    // Remove the auth code from the URL without triggering a reload
+    // Clean up URL
     window.history.replaceState({}, document.title, window.location.pathname);
     return formatUser(user);
   }
-
-  // Otherwise, get the current user
-  const user = await userManager.getUser();
-  return user ? formatUser(user) : null;
+  // Existing session?
+  const existing = await userManager.getUser();
+  return existing ? formatUser(existing) : null;
 }
