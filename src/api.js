@@ -1,11 +1,11 @@
-// fragments-ui/src/api.js
 import { getUser } from './auth';
 
-const API_URL = process.env.API_URL;
+const API_URL =
+  (window.FRAGMENTS_UI_CONFIG && window.FRAGMENTS_UI_CONFIG.API_URL) ||
+  process.env.API_URL;
 
-// Fail fast if env not loaded
 if (!API_URL) {
-  throw new Error('API_URL is not set. Put it in fragments-ui/.env and restart `npm start`.');
+  throw new Error('API_URL is not set. Set it in config.js or .env.');
 }
 console.log('Using API_URL:', API_URL);
 
@@ -15,36 +15,52 @@ async function authHeaders(type) {
   return user.authorizationHeaders(type);
 }
 
-// GET /v1/fragments
-export async function listFragments() {
+
+// List (expanded)
+export async function getUserFragments() {
   const headers = await authHeaders();
-  const res = await fetch(`${API_URL}/v1/fragments`, { headers });
+  const res = await fetch(`${API_URL}/v1/fragments?expand=1`, { headers });
   if (!res.ok) throw new Error(`GET /v1/fragments failed: ${res.status}`);
   return res.json();
 }
 
-// keep compatibility with app.js that imports getUserFragments
-export const getUserFragments = listFragments;
-
-// POST /v1/fragments
-export async function createFragment(text) {
-  const headers = await authHeaders('text/plain');
+// Create and return both Location + id
+export async function createFragment(contentType, body) {
+  const headers = await authHeaders(contentType);
   const res = await fetch(`${API_URL}/v1/fragments`, {
     method: 'POST',
     headers,
-    body: text,
+    body: body ?? '',
   });
+
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    throw new Error(`POST /v1/fragments failed: ${res.status}${body ? ` | ${body}` : ''}`);
+    const text = await res.text().catch(() => '');
+    throw new Error(`POST /v1/fragments failed: ${res.status}${text ? ` | ${text}` : ''}`);
   }
-  return res; // caller can read Location header
+
+  // Try Location header (server must expose it via CORS)
+  let location = res.headers.get('Location') || res.headers.get('location') || null;
+
+  // Try to get id from response body (if API returns it)
+  let id = null;
+  try {
+    const data = await res.clone().json();
+    id = data?.fragment?.id ?? null;
+  } catch {
+    // ignore parse errors; body might be empty
+  }
+
+  // Derive id from Location if needed
+  if (!id && location) id = location.split('/').pop();
+
+  return { location, id, raw: res };
 }
 
-// helper to GET one fragment by id (used by the View button)
 export async function getFragmentById(id) {
   const headers = await authHeaders();
   const res = await fetch(`${API_URL}/v1/fragments/${id}`, { headers });
   if (!res.ok) throw new Error(`GET /v1/fragments/${id} failed: ${res.status}`);
-  return res.text();
+  const contentType = res.headers.get('Content-Type') || '';
+  const text = await res.text();
+  return { contentType, text };
 }

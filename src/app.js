@@ -1,89 +1,96 @@
-// fragments-ui/src/app.js
-import { signIn, getUser } from './auth';
-import { getUserFragments, createFragment, getFragmentById } from './api';
+import { signIn, getUser, signOut } from './auth.js';
+import { getUserFragments, createFragment, getFragmentById } from './api.js';
 
 const $ = (s) => document.querySelector(s);
 
 function renderUser(user) {
   const el = $('#user');
-  if (user) {
-    el.innerHTML = `Logged in as <span class="ok">${user.username || user.email}</span>`;
-  } else {
-    el.textContent = 'Not logged in';
-  }
+  el.innerHTML = user
+    ? `Logged in as <span class="ok">${user.username || user.email}</span>`
+    : 'Not logged in';
 }
 
 async function refreshList() {
-  const frags = $('#frags');
+  const fragsEl = $('#frags');
   const status = $('#status');
   try {
-    const data = await getUserFragments();
-    frags.textContent = JSON.stringify(data, null, 2);
-    status.textContent = 'GET /v1/fragments';
+    status.textContent = 'GET /v1/fragments?expand=1 …';
+    const fragments = await getUserFragments();
+    fragsEl.textContent = JSON.stringify(fragments, null, 2);
+    status.textContent = 'GET /v1/fragments?expand=1 ✓';
+
+    fragsEl.onclick = async () => {
+      const sel = window.getSelection()?.toString() || '';
+      const match = sel.match(/[0-9a-f-]{16,}/i);
+      if (!match) return;
+      const id = match[0];
+      const out = $('#preview');
+      out.textContent = 'Fetching…';
+      try {
+        const { contentType, text } = await getFragmentById(id);
+        let shown = text;
+        if (contentType.includes('application/json')) {
+          try { shown = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+        }
+        out.textContent = `(${contentType})\n\n${shown}`;
+      } catch (err) {
+        out.textContent = `Error: ${err.message}`;
+      }
+    };
   } catch (e) {
-    status.textContent = `GET /v1/fragments  ${e.message}`;
+    status.textContent = `GET /v1/fragments error: ${e.message}`;
   }
 }
 
 function wireCreateForm() {
   const form = $('#createForm');
   const text = $('#fragText');
+  const ctype = $('#ctype');
   const last = $('#lastCreated');
+  const locSpan = $('#lastLocation');
+  const createStatus = $('#createStatus');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    last.innerHTML = 'Creating…';
+    createStatus.textContent = 'Creating…';
+    last.innerHTML = '';
     try {
-      const res = await createFragment(text.value || '');
-
-      // Prefer Location header; fall back to body.fragment.id if header not exposed
-      let loc = res.headers.get('Location') || null;
-      let id = loc ? loc.split('/').pop() : null;
-
-      if (!loc) {
-        try {
-          const body = await res.clone().json();
-          if (body?.fragment?.id) {
-            id = body.fragment.id;
-            loc = `/v1/fragments/${id}`;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
+      const { location, id } = await createFragment(ctype.value, text.value || '');
+      createStatus.innerHTML = `<span class="ok">201 Created</span>`;
+      locSpan.textContent = location || '—';
 
       last.innerHTML = `
-        <div class="ok">201 Created</div>
-        <div>Location: <code>${loc ?? 'null'}</code></div>
-        <button id="viewBtn" type="button"${id ? '' : ' disabled'}>View fragment</button>
+        <div>New fragment id: <code>${id ?? '—'}</code></div>
+        <button id="viewBtn" type="button"${id ? '' : ' disabled'}>Preview now</button>
         <pre id="viewOut"></pre>
       `;
 
-      // View button will fetch with Bearer and show the content
-      $('#viewBtn').addEventListener('click', async () => {
+      $('#viewBtn')?.addEventListener('click', async () => {
         const out = $('#viewOut');
         out.textContent = 'Fetching…';
         try {
-          if (!id) throw new Error('No fragment id available');
-          const body = await getFragmentById(id);
-          out.textContent = body;
+          if (!id) throw new Error('No fragment id');
+          const { contentType, text } = await getFragmentById(id);
+          let shown = text;
+          if (contentType.includes('application/json')) {
+            try { shown = JSON.stringify(JSON.parse(text), null, 2); } catch {}
+          }
+          out.textContent = `(${contentType})\n\n${shown}`;
         } catch (err) {
           out.textContent = `Error: ${err.message}`;
         }
       });
 
-      // clear input, refresh list
       text.value = '';
       await refreshList();
     } catch (err) {
-      last.innerHTML = `<div class="err"> ${err.message}</div>`;
+      createStatus.innerHTML = `<span class="err">${err.message}</span>`;
     }
   });
 }
 
 async function init() {
-  // optional: log every fetch so you can see real GET/POST in Console
+  // helpful: log fetches so you can screenshot the Location in Network
   window.fetch = ((orig) => (...args) => {
     console.log('fetch ->', args[0], args[1]);
     return orig(...args);
@@ -92,16 +99,11 @@ async function init() {
   const user = await getUser();
   renderUser(user);
 
-  $('#login').addEventListener('click', (e) => {
-    e.preventDefault();
-    signIn();
-  });
+  $('#login').addEventListener('click', (e) => { e.preventDefault(); signIn(); });
+  $('#logout').addEventListener('click', (e) => { e.preventDefault(); signOut(); });
 
   wireCreateForm();
-
-  if (user) {
-    await refreshList();
-  }
+  if (user) await refreshList();
 }
 
 document.addEventListener('DOMContentLoaded', init);
